@@ -1,17 +1,20 @@
 - name: "Basic playbook"
   connection: local
-  hosts: localhost
+  hosts: kubernetes
   tasks:
+  - name: "Ping"
+    debug:
+      msg: "{{ test }}"
   - name: Create a new DigitalOcean Kubernetes cluster in New York 1
     community.digitalocean.digital_ocean_kubernetes:
       state: present
       oauth_token: "{{ lookup('env', 'DO_API_TOKEN') }}"
-      name: hacktoberfest
-      region: nyc1
+      name: "{{ inventory_hostname }}"
+      region: "{{ region }}"
       node_pools:
-        - name: hacktoberfest-workers
-          size: s-1vcpu-2gb
-          count: 3
+        - name: "primary-nodes"
+          size: "{{ node_type }}"
+          count: "{{ node_count }}"
       return_kubeconfig: yes
       wait_timeout: 600
     register: my_cluster
@@ -20,9 +23,10 @@
     debug:
       msg: "{{ my_cluster.data.kubeconfig }}"
 
-  - name: Destroy (delete) an existing DigitalOcean Kubernetes cluster
-    community.digitalocean.digital_ocean_kubernetes:
-      state: absent
-      oauth_token: "{{ lookup('env', 'DO_API_TOKEN') }}"
-      name: hacktoberfest
+  # - name: Destroy (delete) an existing DigitalOcean Kubernetes cluster
+  #   community.digitalocean.digital_ocean_kubernetes:
+  #     state: absent
+  #     oauth_token: "{{ lookup('env', 'DO_API_TOKEN') }}"
+  #     name: "{{ inventory_hostname }}-{{ region }}"
+
 
