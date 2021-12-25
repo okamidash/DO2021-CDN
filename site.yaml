@@ -1,11 +1,12 @@
 - name: "Basic playbook"
   connection: local
   hosts: kubernetes
+  vars:
+    kubeconfig: "{{ lookup('env', 'HOME') }}/.kube/{{ inventory_hostname }}.yaml"
+  environment:
+    KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/{{ inventory_hostname }}.yaml"
   tasks:
-  - name: "Ping"
-    debug:
-      msg: "{{ test }}"
-  - name: Create a new DigitalOcean Kubernetes cluster in New York 1
+  - name: "Create a new DigitalOcean Kubernetes cluster in {{ region }}"
     community.digitalocean.digital_ocean_kubernetes:
       state: present
       oauth_token: "{{ lookup('env', 'DO_API_TOKEN') }}"
@@ -15,18 +16,49 @@
         - name: "primary-nodes"
           size: "{{ node_type }}"
           count: "{{ node_count }}"
-      return_kubeconfig: yes
       wait_timeout: 600
+
+  - name: "Fetch the kubeconfig"
+    community.digitalocean.digital_ocean_kubernetes:
+      state: present
+      oauth_token: "{{ lookup('env', 'DO_API_TOKEN') }}"
+      name: "{{ inventory_hostname }}"
+      return_kubeconfig: yes
     register: my_cluster
 
-  - name: Show the kubeconfig for the cluster we just created
-    debug:
-      msg: "{{ my_cluster.data.kubeconfig }}"
+  - name: "Create kubeconfig for cluster {{ inventory_hostname }}"
+    copy:
+      dest: "{{ kubeconfig }}"
+      owner: "{{ ansible_user_id }}"
+      group: "{{ ansible_user_id }}"
+      mode: '0700'
+      content: "{{ my_cluster.data.kubeconfig }}"
+    delegate_to: localhost
+
+
+  - name: "Run linkerd pre-check"
+    command: "linkerd check --pre"
+
+
+  - name: "Get linkerd Install yaml"
+    command: "linkerd install"
+    register: linkerd_install_yaml
+  
+  - debug: msg="{{ linkerd_install_yaml.stdout }}"
+  - name: "Install linkerd"
+    kubernetes.core.k8s:
+      kubeconfig: "{{ kubeconfig }}"
+      inline: "{{ linkerd_install_yaml.stdout }}"
+       
+  - name: "Get linkerd Install yaml"
+    command: "kubectl-minio init"
+    register: kubectl_minio
 
   # - name: Destroy (delete) an existing DigitalOcean Kubernetes cluster
   #   community.digitalocean.digital_ocean_kubernetes:
   #     state: absent
   #     oauth_token: "{{ lookup('env', 'DO_API_TOKEN') }}"
-  #     name: "{{ inventory_hostname }}-{{ region }}"
+  #     name: "{{ inventory_hostname }}"
+  #     region: "{{ region }}"
 
 
